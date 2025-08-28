@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Hem's Chase — Math Escape</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#0f1a2a; --accent:#90d1ff; --good:#b5f5a4; --bad:#ff9aa2;
+    --ui-bg: rgba(255,255,255,0.04);
+  }
+  html,body{height:100%;margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;}
+  body{background:linear-gradient(180deg,#07101a,#091429);display:flex;align-items:center;justify-content:center;color:#eef6ff;}
+  .wrap{width:min(980px,98vw);max-width:980px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 18px 40px rgba(0,0,0,0.6);}
+  header{display:flex;align-items:center;gap:12px;padding:8px 12px;}
+  header img{width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.06);}
+  header h1{font-size:18px;margin:0;}
+  .game-row{display:flex;gap:12px;}
+  .canvas-wrap{flex:1;position:relative;background:var(--panel);border-radius:10px;padding:8px;min-height:420px;max-height:70vh;overflow:hidden;}
+  canvas{display:block;background:linear-gradient(180deg,#072033,#051827);border-radius:8px;width:100%;height:100%;}
+  .hud{position:absolute;left:12px;top:12px;background:var(--ui-bg);padding:8px;border-radius:8px;font-size:14px;border:1px solid rgba(255,255,255,0.03);}
+  .hud div{margin-bottom:6px}
+  .controls{position:absolute;right:12px;bottom:12px;display:flex;gap:6px;flex-direction:column;}
+  .dpad{display:flex;gap:6px;flex-wrap:wrap;width:112px;justify-content:center;}
+  .btn{width:44px;height:44px;border-radius:8px;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;color:#eaf6ff;font-weight:700;border:1px solid rgba(255,255,255,0.03);touch-action:none;user-select:none;}
+  .btn:active{transform:scale(0.96)}
+  .smallbtn{width:60px;height:36px;border-radius:8px;background:#16324a;border:1px solid rgba(255,255,255,0.04);}
+  .panel-right{width:260px;padding:12px;display:flex;flex-direction:column;gap:8px;}
+  .panel-right .box{background:var(--ui-bg);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);font-size:14px;}
+  .panel-right button{padding:8px;border-radius:8px;border:0;background:var(--accent);color:#07101a;font-weight:700;cursor:pointer;}
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(0deg, rgba(2,6,12,0.5), rgba(2,6,12,0.4));z-index:40;}
+  .modal{background:#071428;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);width:min(520px,94vw);color:#eaf6ff;text-align:center;}
+  .modal input{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);width:70%;margin-top:8px;background:#062033;color:#eaf6ff;}
+  .modal button{margin-top:10px;padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:#07101a;font-weight:700;}
+  .jail-timer{position:absolute;left:50%;transform:translateX(-50%);bottom:24px;background:rgba(0,0,0,0.6);padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);}
+  footer{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:8px 0 0 0;color: #9fb3d9;}
+  @media (max-width:720px){
+    .game-row{flex-direction:column;}
+    .panel-right{width:100%;}
+    .controls{right:8px;bottom:8px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" role="application" aria-label="Hem's Chase Game">
+  <header>
+    <!-- teacher photo embedded (base64 from earlier) -->
+    <img id="hemAvatar" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBD..." alt="Hem">
+    <div>
+      <h1>Hem’s Math Chase — Escape with Math!</h1>
+      <div style="font-size:13px;color:#9fb3d9">Survive 20s per level — up to level 10. Wrong answers → 9s jail. Tap to enable audio if speech blocked.</div>
+    </div>
+  </header>
+
+  <div class="game-row">
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="hud" id="hud">
+        <div>Level: <b id="level">1</b></div>
+        <div>Time left: <b id="levelTime">20</b>s</div>
+        <div>Lives: <b id="lives">3</b></div>
+      </div>
+      <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+      <div class="controls" id="controls">
+        <div class="dpad" id="dpad">
+          <div class="btn" id="up">▲</div>
+          <div style="display:flex;gap:6px;width:100%;justify-content:center">
+            <div class="btn" id="left">◀</div>
+            <div class="btn" id="down">▼</div>
+            <div class="btn" id="right">▶</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <div class="smallbtn" id="btnSprint">Sprint</div>
+          <div style="width:6px;"></div>
+          <div class="smallbtn" id="btnPause">Pause</div>
+        </div>
+      </div>
+
+      <div class="jail-timer" id="jailTimer" style="display:none;"></div>
+    </div>
+
+    <aside class="panel-right">
+      <div class="box">
+        <div><strong>Instructions</strong></div>
+        <ul style="padding-left:18px;margin:6px 0">
+          <li>Move: WASD or arrows or on-screen buttons.</li>
+          <li>If Hem catches you, answer a formula to escape.</li>
+          <li>Wrong answer: Hem drags you to the jail for 9s (and you lose a life).</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <div>Current Question Log</div>
+        <div id="log" style="height:160px;overflow:auto;margin-top:8px;color:#d9ecff;font-size:13px"></div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button id="startBtn">Start Game</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+      <div class="box" style="display:flex;flex-direction:column;gap:6px">
+        <div>Level Progress</div>
+        <div style="height:8px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden">
+          <div id="progressBar" style="height:8px;background:linear-gradient(90deg,#90d1ff,#7ec8e3);width:0%"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <div>© Hem's Classroom</div>
+    <div>Levels 1–10</div>
+  </footer>
+</div>
+
+<!-- Modal for question -->
+<div id="modal" class="overlay" style="display:none;">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div id="modalText" style="font-size:18px;margin-bottom:10px"></div>
+    <input id="modalInput" placeholder="Type answer here" autocomplete="off"/>
+    <div style="margin-top:10px">
+      <button id="modalSubmit">Submit</button>
+      <button id="modalGiveUp" style="margin-left:8px;background:var(--bad);color:#fff">Give Up</button>
+    </div>
+    <div id="modalHelp" style="font-size:13px;color:#9fb3d9;margin-top:8px"></div>
+  </div>
+</div>
+
+<script>
+/*
+  Hem's Chase Game
+  - Mobile & desktop friendly
+  - Up to level 10
+  - Jail room, obstacles, voice via SpeechSynthesis (robotic with crack)
+  - Save as index.html and open in browser
+*/
+
+/* --- Utilities & Game Constants --- */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let CW = canvas.width, CH = canvas.height;
+
+const hudLevel = document.getElementById('level');
+const hudTime = document.getElementById('levelTime');
+const hudLives = document.getElementById('lives');
+const logEl = document.getElementById('log');
+const progressBar = document.getElementById('progressBar');
+
+const modal = document.getElementById('modal');
+const modalText = document.getElementById('modalText');
+const modalInput = document.getElementById('modalInput');
+const modalSubmit = document.getElementById('modalSubmit');
+const modalGiveUp = document.getElementById('modalGiveUp');
+const modalHelp = document.getElementById('modalHelp');
+
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+
+const jailTimerEl = document.getElementById('jailTimer');
+
+const playerRadius = 12;
+const hemRadius = 18;
+const jailRoom = {x: CW - 160, y: 40, w: 120, h: 120}; // fixed jail location in map (canvas coords)
+const jailInner = { x: jailRoom.x + 20, y: jailRoom.y + 20 }; // player spawn inside jail
+const jailExit = { x: jailRoom.x + jailRoom.w + 20, y: jailRoom.y + jailRoom.h - 20 }; // where Hem stands guard
+const levelDuration = 20; // seconds to survive per level
+const maxLevels = 10;
+
+let running = false;
+let lastTime = 0;
+let accumulated = 0;
+
+/* Game state */
+let player = { x: 80, y: CH/2, vx:0, vy:0, speed: 140, jailed:false };
+let hem = { x: CW-80, y: CH/2, speed: 90, chasing:true };
+let obstacles = []; // array of {x,y,w,h}
+let level = 1;
+let levelTimer = levelDuration;
+let lives = 3;
+let score = 0;
+let jailTimeout = null;
+let questionActive = false;
+let awaitingAnswerResolve = null;
+
+/* Movement input */
+const input = { up:false, down:false, left:false, right:false, sprint:false };
+
+/* Formulas list */
+const FORMULAS = [
+  { q: 'Pythagorean theorem?', accepts: ['a^2+b^2=c^2','a²+b²=c²','a2+b2=c2'] },
+  { q: 'Area of a circle (radius r)?', accepts: ['pir^2','πr^2','pi*r^2'] },
+  { q: 'Circumference of a circle (radius r)?', accepts: ['2pir','2πr','2*pi*r'] },
+  { q: 'Area of a triangle (base b, height h)?', accepts: ['1/2bh','0.5bh','(1/2)bh','1/2*b*h'] },
+  { q: 'Slope between (x1,y1) and (x2,y2)?', accepts: ['(y2-y1)/(x2-x1)','y2-y1/x2-x1','(y₂-y₁)/(x₂-x₁)'] },
+  { q: 'Distance between (x1,y1) and (x2,y2)?', accepts: ['sqrt((x2-x1)^2+(y2-y1)^2)','√((x2-x1)^2+(y2-y1)^2)'] },
+  { q: 'Quadratic formula ax^2+bx+c=0?', accepts: ['(-b±sqrt(b^2-4ac))/(2a)','(-b±√(b^2-4ac))/(2a)','(-b+/-sqrt(b^2-4ac))/(2a)'] },
+  { q: 'Area of a rectangle (l,w)?', accepts: ['lw','l*w'] },
+  { q: 'Simple interest (P,r,t)?', accepts: ['prt','p*r*t'] },
+  { q: 'Arithmetic mean of n numbers?', accepts: ['sum/n','(sum)/n','(Σx)/n'] },
+];
+
+/* normalize */
+function normalize(s=''){
+  return String(s || '').toLowerCase().replace(/\s+/g,'').replace(/·|×/g,'*').replace(/[–—]/g,'-').replace(/π/g,'pi').replace(/√/g,'sqrt').replace(/²/g,'^2').replace(/₁/g,'1').replace(/₂/g,'2');
+}
+
+/* log */
+function addLog(txt){
+  const d = document.createElement('div'); d.textContent = txt;
+  logEl.prepend(d);
+  if(logEl.children.length > 200) logEl.removeChild(logEl.lastChild);
+}
+
+/* --- Canvas resize responsiveness --- */
+function resizeCanvas(){
+  // keep fixed internal resolution for gameplay, but scale CSS to fit container
+  const wrap = document.getElementById('canvasWrap');
+  const rect = wrap.getBoundingClientRect();
+  const aspect = CW / CH;
+  let w = rect.width - 16;
+  let h = rect.height - 16;
+  // Let canvas CSS fill container; internal buffer stays at CWxCH
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+/* --- Generate obstacles for current level --- */
+function generateObstaclesForLevel(lvl){
+  const base = 3; // base obstacles
+  const extra = Math.min(12, lvl + Math.floor(lvl/2));
+  const count = base + extra;
+  const arr = [];
+  let attempts = 0;
+  while(arr.length < count && attempts < 1200){
+    attempts++;
+    const w = 40 + Math.floor(Math.random()*140);
+    const h = 30 + Math.floor(Math.random()*120);
+    const x = 30 + Math.floor(Math.random()*(CW - 60 - w));
+    const y = 30 + Math.floor(Math.random()*(CH - 60 - h));
+    const rect = {x,y,w,h};
+    // avoid spawn areas and jail room and exit
+    if(rectOverlap(rect, {x:player.x-80,y:player.y-80,w:160,h:160})) continue;
+    if(rectOverlap(rect, {x:hem.x-120,y:hem.y-120,w:240,h:240})) continue;
+    if(rectOverlap(rect, jailRoom)) continue;
+    // avoid too close to edges
+    if(x < 10 || y < 10 || x + w > CW - 10 || y + h > CH - 10) continue;
+    // avoid overlapping other obstacles too much
+    let ok = true;
+    for(const o of arr){
+      if(rectOverlap(rect, o, 12)){ ok = false; break; }
+    }
+    if(!ok) continue;
+    arr.push(rect);
+  }
+  return arr;
+}
+
+/* rectangle overlap (optional padding) */
+function rectOverlap(a,b,pad=0){
+  return !(a.x + a.w - pad <= b.x + pad || a.x + pad >= b.x + b.w - pad || a.y + a.h - pad <= b.y + pad || a.y + pad >= b.y + b.h - pad);
+}
+
+/* circle-rect coll */
+function circleRectColl(cx, cy, r, rect){
+  const rx = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+  const ry = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+  const dx = cx - rx, dy = cy - ry;
+  return (dx*dx + dy*dy) <= r*r;
+}
+
+/* move with collisions (separate axis resolution) */
+function moveEntityWithWalls(ent, vx, vy, dt){
+  // attempt x
+  const nx = ent.x + vx * dt;
+  const bbox = {x: nx - ent.radius, y: ent.y - ent.radius, w: ent.radius*2, h: ent.radius*2};
+  let collided = false;
+  for(const ob of obstacles){
+    if(rectOverlap(bbox, ob)) { collided = true; break; }
+  }
+  if(!collided && !pointInJail(nx, ent.y, ent.radius)){
+    ent.x = nx;
+  }
+  // attempt y
+  const ny = ent.y + vy * dt;
+  const bbox2 = {x: ent.x - ent.radius, y: ny - ent.radius, w: ent.radius*2, h: ent.radius*2};
+  collided = false;
+  for(const ob of obstacles){
+    if(rectOverlap(bbox2, ob)) { collided = true; break; }
+  }
+  if(!collided && !pointInJail(ent.x, ny, ent.radius)){
+    ent.y = ny;
+  }
+}
+
+/* check if a point is inside jail (we'll block movement into walls except during forced jail teleport) */
+function pointInJail(x,y,r){
+  // allow movement in jail interior only when jailed
+  // for collision purpose we just consider jail walls as a rectangle; to prevent passing through walls to the outside
+  return false; // we handle jail separately (don't block movement globally)
+}
+
+/* distance */
+function dist(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return Math.sqrt(dx*dx + dy*dy); }
+
+/* --- Hem AI: chase with simple obstacle avoidance --- */
+function updateHem(dt){
+  if(player.jailed){
+    // If player jailed, hem goes to guard position near jail exit and stand guard
+    const target = {x: jailExit.x - 20, y: jailExit.y};
+    const vtx = target.x - hem.x, vty = target.y - hem.y;
+    const d = Math.hypot(vtx, vty);
+    if(d > 2){
+      const nx = (vtx / d) * hem.speed;
+      const ny = (vty / d) * hem.speed;
+      moveHem(nx, ny, dt);
+    }
+    return;
+  }
+  // Normal chase: vector to player
+  const vtx = player.x - hem.x, vty = player.y - hem.y;
+  const d = Math.hypot(vtx, vty);
+  if(d < 1) return;
+  let tx = vtx / d, ty = vty / d;
+  // try direct move
+  let nx = tx * hem.speed;
+  let ny = ty * hem.speed;
+  // attempt move and if blocked use simple detour (rotate vector)
+  if(!canHemMove(nx, ny, dt)){
+    // try rotated directions progressively
+    const angles = [Math.PI/6, -Math.PI/6, Math.PI/3, -Math.PI/3, Math.PI/2, -Math.PI/2];
+    let moved = false;
+    for(const a of angles){
+      const cos = Math.cos(a), sin = Math.sin(a);
+      const rx = tx * cos - ty * sin;
+      const ry = tx * sin + ty * cos;
+      nx = rx * hem.speed; ny = ry * hem.speed;
+      if(canHemMove(nx, ny, dt)){ moveHem(nx, ny, dt); moved = true; break; }
+    }
+    if(!moved){
+      // small random jitter to escape
+      const rx = tx + (Math.random()-0.5)*0.6;
+      const ry = ty + (Math.random()-0.5)*0.6;
+      const mag = Math.hypot(rx,ry) || 1;
+      moveHem((rx/mag)*hem.speed, (ry/mag)*hem.speed, dt);
+    }
+  } else {
+    moveHem(nx, ny, dt);
+  }
+}
+
+function canHemMove(nx, ny, dt){
+  const testX = hem.x + nx*dt;
+  const testY = hem.y + ny*dt;
+  const bbox = {x:testX-hemRadius,y:testY-hemRadius,w:hemRadius*2,h:hemRadius*2};
+  for(const ob of obstacles){ if(rectOverlap(bbox, ob)) return false; }
+  // don't go inside jail interior unless player jailed (hem can stand near guard)
+  return true;
+}
+
+function moveHem(nx, ny, dt){
+  // separate axis resolution
+  const testX = hem.x + nx*dt;
+  const bboxX = {x:testX-hemRadius,y:hem.y-hemRadius,w:hemRadius*2,h:hemRadius*2};
+  let blockedX = false;
+  for(const ob of obstacles){ if(rectOverlap(bboxX, ob)) { blockedX = true; break; } }
+  if(!blockedX) hem.x = testX;
+  const testY = hem.y + ny*dt;
+  const bboxY = {x:hem.x-hemRadius,y:testY-hemRadius,w:hemRadius*2,h:hemRadius*2};
+  let blockedY = false;
+  for(const ob of obstacles){ if(rectOverlap(bboxY, ob)) { blockedY = true; break; } }
+  if(!blockedY) hem.y = testY;
+}
+
+/* --- Player movement update --- */
+function updatePlayer(dt){
+  if(player.jailed) return;
+  let sx = 0, sy = 0;
+  if(input.up) sy -= 1;
+  if(input.down) sy += 1;
+  if(input.left) sx -= 1;
+  if(input.right) sx += 1;
+  const spd = player.speed * (input.sprint ? 1.45 : 1);
+  if(sx !== 0 || sy !== 0){
+    const mag = Math.hypot(sx, sy);
+    const vx = (sx / mag) * spd;
+    const vy = (sy / mag) * spd;
+    // movement with collision resolution with obstacles
+    // move x
+    const nx = player.x + vx * dt;
+    const bboxX = {x: nx - playerRadius, y: player.y - playerRadius, w: playerRadius*2, h: playerRadius*2};
+    let collX = false;
+    for(const ob of obstacles){ if(rectOverlap(bboxX, ob)) { collX = true; break; } }
+    if(!collX) player.x = nx;
+    // move y
+    const ny = player.y + vy * dt;
+    const bboxY = {x: player.x - playerRadius, y: ny - playerRadius, w: playerRadius*2, h: playerRadius*2};
+    let collY = false;
+    for(const ob of obstacles){ if(rectOverlap(bboxY, ob)) { collY = true; break; } }
+    if(!collY) player.y = ny;
+    // keep inside canvas margins
+    player.x = Math.max(playerRadius+6, Math.min(CW - playerRadius-6, player.x));
+    player.y = Math.max(playerRadius+6, Math.min(CH - playerRadius-6, player.y));
+  }
+}
+
+/* --- Check capture --- */
+function checkCapture(){
+  if(player.jailed || questionActive) return;
+  const d = dist(player.x, player.y, hem.x, hem.y);
+  if(d <= playerRadius + hemRadius + 4){
+    // caught!
+    handleCapture();
+  }
+}
+
+/* --- Handle capture: open question modal and play Hem voice --- */
+function pickQuestion(){
+  const q = FORMULAS[Math.floor(Math.random()*FORMULAS.length)];
+  return { q: q.q, accepts: q.accepts.map(normalize) };
+}
+
+function handleCapture(){
+  questionActive = true;
+  // stop movement
+  addLog('Hem: "You were caught!"');
+  // Hem speaks with robotic voice with crack effect
+  speakHemWithCrack(
+    'Have you read the formula?',
+    'aaargh',
+    'Wait! I will keep you till 9 pm and call your mother!'
+  );
+  // show question modal after short delay so voice starts
+  setTimeout(async () => {
+    const Q = pickQuestion();
+    showQuestionModal(Q);
+  }, 700);
+}
+
+/* show question modal and return promise of outcome */
+function showQuestionModal(Q){
+  modalText.textContent = 'Hem asks: ' + Q.q;
+  modalInput.value = '';
+  modalHelp.textContent = 'Answer exactly (formulas accepted like a^2+b^2=c^2 or pi*r^2).';
+  modal.style.display = 'flex';
+  modalInput.focus();
+  const p = new Promise((resolve) => {
+    awaitingAnswerResolve = resolve;
+    function submitHandler(){
+      const val = modalInput.value.trim();
+      if(val === '') return;
+      const nv = normalize(val);
+      const ok = Q.accepts.some(a => a === nv);
+      closeModal();
+      resolve(ok);
+    }
+    function giveUpHandler(){
+      closeModal(); resolve(false);
+    }
+    modalSubmit.onclick = submitHandler;
+    modalGiveUp.onclick = giveUpHandler;
+    modalInput.onkeydown = (e) => { if(e.key === 'Enter') submitHandler(); };
+  });
+  p.then(result => {
+    awaitingAnswerResolve = null;
+    questionActive = false;
+    if(result){
+      addLog('You answered correctly and escaped!');
+      releaseFromCapture(true);
+    } else {
+      addLog('Wrong or no answer — Hem drags you to jail!');
+      releaseFromCapture(false);
+    }
+  });
+}
+
+/* close modal */
+function closeModal(){
+  modal.style.display = 'none';
+  modalSubmit.onclick = null;
+  modalGiveUp.onclick = null;
+  modalInput.onkeydown = null;
+}
+
+/* releaseFromCapture: if ok true => resume; else jail for 9s and lose life */
+function releaseFromCapture(ok){
+  if(ok){
+    // instant resume: reposition player a little away from Hem
+    const awayX = player.x + (player.x - hem.x)*0.6;
+    const awayY = player.y + (player.y - hem.y)*0.6;
+    player.x = Math.max(playerRadius+6, Math.min(CW-playerRadius-6, awayX));
+    player.y = Math.max(playerRadius+6, Math.min(CH-playerRadius-6, awayY));
+    // no extra effect
+  } else {
+    // deduct life
+    lives = Math.max(0, lives - 1);
+    hudLives.textContent = String(lives);
+    if(lives <= 0){
+      // game over
+      addLog('No lives left — Game Over');
+      showGameOver();
+      return;
+    }
+    // drag player to jail interior and lock them for 9 seconds
+    player.jailed = true;
+    player.x = jailInner.x;
+    player.y = jailInner.y;
+    // Hem goes to guard spot (we leave hem's position updating in updateHem)
+    const jailSec = 9;
+    let remaining = jailSec;
+    jailTimerEl.style.display = 'block';
+    jailTimerEl.textContent = `Jailed: ${remaining}s`;
+    jailTimeout && clearInterval(jailTimeout);
+    jailTimeout = setInterval(() => {
+      remaining--;
+      if(remaining <= 0){
+        clearInterval(jailTimeout);
+        jailTimerEl.style.display = 'none';
+        player.jailed = false;
+        addLog('You are released from jail. Run!');
+        // teleport player to just outside jail exit
+        player.x = jailExit.x + 18;
+        player.y = jailExit.y;
+        // small invulnerability window offset
+      } else {
+        jailTimerEl.textContent = `Jailed: ${remaining}s`;
+      }
+    }, 1000);
+  }
+}
+
+/* speak Hem with mid-sentence crack effect using Web Speech API */
+function speakHemWithCrack(part1, crack, part2){
+  try {
+    if(!window.speechSynthesis) return;
+    // cancel any existing utterances
+    window.speechSynthesis.cancel();
+    // part1 normal robotic-ish
+    const u1 = new SpeechSynthesisUtterance(part1);
+    u1.voice = speechSynthesis.getVoices()[0] || null;
+    u1.rate = 0.98;
+    u1.pitch = 0.9;
+    u1.volume = 1;
+    // crack syllable
+    const uc = new SpeechSynthesisUtterance(crack);
+    uc.rate = 1.1;
+    uc.pitch = 2.3; // big pitch for crack
+    uc.volume = 0.95;
+    // part2 lower pitch slightly angry
+    const u2 = new SpeechSynthesisUtterance(part2);
+    u2.rate = 0.98;
+    u2.pitch = 0.78;
+    u2.volume = 1;
+    // speak sequence with tiny delays
+    speechSynthesis.speak(u1);
+    setTimeout(()=> speechSynthesis.speak(uc), Math.max(150, part1.length * 18));
+    setTimeout(()=> speechSynthesis.speak(u2), Math.max(350, part1.length * 20 + 120));
+  } catch(e){
+    console.warn('Speech not available', e);
+  }
+}
+
+/* --- Game loop --- */
+function gameLoop(ts){
+  if(!running){ lastTime = ts; requestAnimationFrame(gameLoop); return; }
+  const dt = Math.min(0.05, (ts - lastTime) / 1000); // clamp dt
+  lastTime = ts;
+
+  // update timers if not jailed and not question active
+  if(!player.jailed && !questionActive){
+    levelTimer -= dt;
+    if(levelTimer <= 0){
+      // level cleared
+      levelUp();
+    }
+  }
+
+  updatePlayer(dt);
+  updateHem(dt);
+  checkCapture();
+
+  // render
+  render();
+
+  requestAnimationFrame(gameLoop);
+}
+
+/* render world */
+function render(){
+  // clear
+  ctx.clearRect(0,0,CW,CH);
+
+  // background grid subtle
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = '#04202a';
+  for(let x=0;x<CW;x+=40){
+    ctx.fillRect(x,0,1,CH);
+  }
+  for(let y=0;y<CH;y+=40){
+    ctx.fillRect(0,y,CW,1);
+  }
+  ctx.restore();
+
+  // draw jail room
+  ctx.save();
+  ctx.fillStyle = 'rgba(40,30,70,0.65)';
+  ctx.fillRect(jailRoom.x, jailRoom.y, jailRoom.w, jailRoom.h);
+  ctx.strokeStyle = 'rgba(130,100,200,0.25)';
+  ctx.lineWidth = 2; ctx.strokeRect(jailRoom.x, jailRoom.y, jailRoom.w, jailRoom.h);
+  ctx.fillStyle = '#cfe2ff';
+  ctx.font = '12px system-ui';
+  ctx.fillText('JAIL', jailRoom.x + 8, jailRoom.y + 18);
+  ctx.restore();
+
+  // obstacles
+  ctx.save(); ctx.fillStyle = '#16313f'; ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  for(const ob of obstacles){
+    ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+    ctx.strokeRect(ob.x, ob.y, ob.w, ob.h);
+  }
+  ctx.restore();
+
+  // player
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = '#8cf7c7';
+  ctx.arc(player.x, player.y, playerRadius, 0, Math.PI*2);
+  ctx.fill();
+  // outline
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.stroke();
+  ctx.restore();
+
+  // Hem drawing: use avatar image if loaded
+  const avatar = document.getElementById('hemAvatar');
+  if(avatar.complete && avatar.naturalWidth !== 0){
+    ctx.save();
+    // draw circle avatar
+    const sx = hem.x - hemRadius, sy = hem.y - hemRadius, s = hemRadius*2;
+    ctx.beginPath(); ctx.arc(hem.x, hem.y, hemRadius, 0, Math.PI*2); ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(avatar, sx, sy, s, s);
+    ctx.restore();
+    // outline
+    ctx.beginPath(); ctx.arc(hem.x, hem.y, hemRadius, 0, Math.PI*2);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
+  } else {
+    ctx.save();
+    ctx.fillStyle = '#ffcc80';
+    ctx.beginPath(); ctx.arc(hem.x, hem.y, hemRadius, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // debug: draw hem-target (optional)
+  // show level progress overlay
+  const pct = Math.max(0, Math.min(1, (levelDuration - levelTimer) / levelDuration));
+  progressBar.style.width = `${Math.round(pct*100)}%`;
+  hudLevel.textContent = String(level);
+  hudTime.textContent = Math.max(0, Math.ceil(levelTimer));
+  hudLives.textContent = String(lives);
+}
+
+/* --- Level management --- */
+function startLevel(l){
+  level = l;
+  levelTimer = levelDuration;
+  // set Hem speed based on level
+  hem.speed = 90 + (level - 1) * 12; // increases each level
+  // player speed slight decrease per level for more challenge?
+  player.speed = 140 - (level - 1) * 4;
+  player.speed = Math.max(95, player.speed);
+  // position player and hem corners
+  player.x = 80; player.y = CH/2;
+  hem.x = CW - 80; hem.y = CH/2;
+  player.jailed = false;
+  questionActive = false;
+  // generate obstacles appropriate for level
+  obstacles = generateObstaclesForLevel(level);
+  addLog(`Level ${level} start — Hem speed ${Math.round(hem.speed)} px/s`);
+}
+
+/* level up */
+function levelUp(){
+  if(level >= maxLevels){
+    addLog('You beat all levels! You win!');
+    showVictory();
+    return;
+  }
+  addLog(`Level ${level} cleared! Advancing...`);
+  startLevel(level + 1);
+}
+
+/* game start/reset */
+function startGame(){
+  running = true;
+  lastTime = performance.now();
+  level = 1;
+  lives = 3;
+  hudLives.textContent = String(lives);
+  startLevel(1);
+  requestAnimationFrame(gameLoop);
+}
+
+function resetGame(){
+  running = false;
+  // clear timeouts
+  if(jailTimeout) clearInterval(jailTimeout);
+  jailTimerEl.style.display = 'none';
+  obstacles = [];
+  player = { x: 80, y: CH/2, vx:0, vy:0, speed:140, jailed:false, radius: playerRadius };
+  hem = { x: CW-80, y: CH/2, speed:90 };
+  level = 1;
+  levelTimer = levelDuration;
+  lives = 3;
+  progressBar.style.width = '0%';
+  addLog('Game reset.');
+  render();
+}
+
+/* victory & game over */
+function showVictory(){
+  running = false;
+  addLog('CONGRATS — You beat level 10!');
+  setTimeout(() => {
+    alert('You cleared all 10 levels! 🎉');
+    resetGame();
+  }, 200);
+}
+
+function showGameOver(){
+  running = false;
+  addLog('Game Over. Reloading to start again...');
+  setTimeout(() => resetGame(), 800);
+}
+
+/* --- Input handling: keyboard AND touch buttons --- */
+window.addEventListener('keydown', (e) => {
+  if(e.key === 'w' || e.key === 'ArrowUp') input.up = true;
+  if(e.key === 's' || e.key === 'ArrowDown') input.down = true;
+  if(e.key === 'a' || e.key === 'ArrowLeft') input.left = true;
+  if(e.key === 'd' || e.key === 'ArrowRight') input.right = true;
+  if(e.key === 'Shift') input.sprint = true;
+});
+window.addEventListener('keyup', (e) => {
+  if(e.key === 'w' || e.key === 'ArrowUp') input.up = false;
+  if(e.key === 's' || e.key === 'ArrowDown') input.down = false;
+  if(e.key === 'a' || e.key === 'ArrowLeft') input.left = false;
+  if(e.key === 'd' || e.key === 'ArrowRight') input.right = false;
+  if(e.key === 'Shift') input.sprint = false;
+});
+
+/* touch buttons */
+function bindBtn(id, action){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('pointerdown', (e) => { e.preventDefault(); input[action] = true; });
+  el.addEventListener('pointerup', (e) => { e.preventDefault(); input[action] = false; });
+  el.addEventListener('pointerleave', (e) => { e.preventDefault(); input[action] = false; });
+  el.addEventListener('lostpointercapture', (e) => { input[action] = false; });
+}
+bindBtn('up','up'); bindBtn('down','down'); bindBtn('left','left'); bindBtn('right','right');
+bindBtn('btnSprint','sprint');
+document.getElementById('btnPause').addEventListener('click', ()=> {
+  running = !running;
+  if(running) { lastTime = performance.now(); requestAnimationFrame(gameLoop); addLog('Resume'); }
+  else addLog('Paused');
+});
+
+/* start / reset */
+startBtn.addEventListener('click', ()=> {
+  // enable audio on user interaction (some browsers require user gesture)
+  if(window.speechSynthesis && speechSynthesis.getVoices().length === 0){
+    // trigger voices loading
+    window.speechSynthesis.onvoiceschanged = ()=>{};
+  }
+  if(!running) startGame();
+});
+resetBtn.addEventListener('click', resetGame);
+
+/* modal control: ensure tapping outside doesn't close (explicit only) */
+modal.addEventListener('click', (e)=> { if(e.target === modal) {/*ignore*/} });
+
+/* ensure canvas scaling on load */
+window.addEventListener('load', ()=> {
+  resizeCanvas();
+  // initial obstacles
+  obstacles = generateObstaclesForLevel(1);
+  render();
+});
+
+/* small helper to ensure avatar image loads (we referenced a shortened base64 above) */
+document.getElementById('hemAvatar').addEventListener('error', ()=> {
+  // if image fails, we'll just render Hem as a circle
+});
+
+/* initial render & kick */
+render();
+
+/* ensure CSS-resize of canvas if container changes */
+new ResizeObserver(resizeCanvas).observe(document.getElementById('canvasWrap'));
+</script>
+</body>
+</html>
